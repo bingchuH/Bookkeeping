@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bookkeeping</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+  <div class="app">
+    <nav>
+      <div class="brand">
+        <h1>账簿</h1>
+        <p>Bookkeeping</p>
+      </div>
+      <div class="nav-group">
+        <button class="active" data-view="home">总览</button>
+        <button data-view="entries">账单</button>
+        <button data-view="confirm"><span>待确认</span><span class="nav-badge hidden" id="pendingNavBadge">0</span></button>
+        <button data-view="assets">账户</button>
+        <button data-view="settings">设置</button>
+      </div>
+    </nav>
+    <main>
+      <header>
+        <div class="title">
+          <h2 id="pageTitle">财务总览</h2>
+          <div class="muted" id="status"></div>
+        </div>
+        <div class="toolbar">
+          <input id="search" placeholder="搜索账单、备注、账户">
+          <button class="primary" id="quickAdd">快速记账</button>
+          <a class="secondary" href="/api/export.csv">导出</a>
+        </div>
+      </header>
+
+      <section class="period-panel" id="periodPanel">
+        <div class="period-tabs">
+          <button data-period-mode="all">全部</button><span>|</span>
+          <button data-period-mode="year">年</button><span>|</span>
+          <button class="active" data-period-mode="month">月</button><span>|</span>
+          <button data-period-mode="more">更多</button>
+        </div>
+        <div class="period-row">
+          <div class="period-range">
+            <span>范围：</span>
+            <button class="period-step hidden" id="prevCycle">‹</button>
+            <button class="date-trigger" id="rangeStartTrigger"><span id="rangeStartText">--/--/--</span><span>▾</span></button>
+            <span>-</span>
+            <button class="date-trigger" id="rangeEndTrigger"><span id="rangeEndText">--/--/--</span><span>▾</span></button>
+            <button class="period-step hidden" id="nextCycle">›</button>
+          </div>
+          <div class="more-periods hidden" id="moreControls">
+            <div class="cycle-label">周期</div>
+            <div class="cycle-tags">
+              <button class="active" data-cycle="quarter">季</button>
+              <button data-cycle="week">周</button>
+              <button data-cycle="day">日</button>
+            </div>
+          </div>
+        </div>
+        <div class="date-popover hidden" id="datePicker">
+          <div class="date-picker-head">
+            <select id="datePickerYear"></select>
+            <select id="datePickerMonth"></select>
+          </div>
+          <div class="date-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div class="date-grid" id="datePickerGrid"></div>
+        </div>
+      </section>
+
+      <section id="quickForm" class="section quick-form hidden">
+        <h3>快速记账</h3>
+        <div class="form">
+          <div class="quick-main-row">
+            <div class="quick-fields">
+              <label>类型<select id="fType"><option>支出</option><option>收入</option><option>转账</option><option>借入</option><option>借出</option><option>还款</option><option>收款</option></select></label>
+              <label id="fCategoryWrap">分类<select id="fCategory"></select></label>
+              <label>金额<input id="fAmount" placeholder="0.00" inputmode="decimal"></label>
+              <label>时间<input id="fTime" type="datetime-local"></label>
+              <label id="fAccountWrap">账户<select id="fAccount"></select></label>
+              <label id="fTargetAccountWrap" class="hidden">转入账户<select id="fTargetAccount"></select></label>
+            </div>
+            <div class="quick-actions">
+              <button class="link-button" id="toggleQuickMore" type="button">展开</button>
+              <button class="primary" id="saveEntry">保存</button>
+            </div>
+          </div>
+          <div class="quick-more-fields hidden" id="quickMoreFields">
+            <label>交易对象<input id="fTransactionObject" placeholder="对方名称、债务人或平台"></label>
+            <label>备注<input id="fNote" placeholder="补充说明"></label>
+            <label class="muted form-check">
+              <input type="checkbox" id="fLearn">
+              <span>学习关键词规则</span>
+              <span class="help-tip" tabindex="0" aria-label="说明">?
+                <span class="help-tip-content">勾选后，会把当前交易对象和分类保存为规则；以后相同关键词的账单会优先自动归到这个分类。</span>
+              </span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section id="home" class="view grid">
+        <div class="grid kpis">
+          <div class="kpi kpi-action" id="incomeKpi"><div class="label">收入</div><div class="metric income" id="mIncome">0.00</div></div>
+          <div class="kpi kpi-action" id="expenseKpi"><div class="label">支出</div><div class="metric expense" id="mExpense">0.00</div></div>
+          <div class="kpi"><div class="label">结余</div><div class="metric" id="mBalance">0.00</div></div>
+          <div class="kpi"><div class="label">待确认</div><div class="metric" id="mPending">0</div></div>
+        </div>
+        <div class="grid overview-charts">
+          <div class="section trend-card"><h3>收支趋势</h3><div class="chart-wrap"><canvas id="cashflowTrend" width="900" height="220"></canvas><div class="chart-tip" id="cashflowTrendTip"></div></div></div>
+        </div>
+        <div class="grid pie-grid">
+          <div class="section pie-card">
+            <div class="section-head">
+              <h3>支出分类占比</h3>
+              <div class="level-switch" aria-label="支出分类层级">
+                <button class="active" data-expense-category-level="major">大类</button>
+                <button data-expense-category-level="minor">小类</button>
+              </div>
+            </div>
+            <div class="chart-wrap"><canvas id="expensePie" width="860" height="420"></canvas><div class="chart-tip" id="expensePieTip"></div></div>
+          </div>
+          <div class="section pie-card">
+            <h3>收入分类占比</h3>
+            <div class="chart-wrap"><canvas id="incomePie" width="860" height="420"></canvas><div class="chart-tip" id="incomePieTip"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="entries" class="view section hidden"><div id="entryTable"></div></section>
+      <section id="confirm" class="view grid pending-layout hidden">
+        <aside class="section">
+          <h3>待确认概览</h3>
+          <div id="pendingSummary" class="side-list"></div>
+        </aside>
+        <div class="pending-stack" id="pendingList"></div>
+      </section>
+      <section id="assets" class="view grid asset-grid hidden">
+        <div class="section"><h3>账户余额</h3><div id="assetList"></div></div>
+        <div class="section"><h3>应收应付</h3><div id="debtList"></div></div>
+      </section>
+      <section id="settings" class="view section settings-page hidden">
+        <div class="settings-block">
+          <div class="section-head">
+            <h3>外观设置</h3>
+          </div>
+          <div class="settings-list">
+            <label class="settings-row">
+              <span>
+                <strong>深色主题</strong>
+                <em>切换仪表盘的明暗外观</em>
+              </span>
+              <input type="checkbox" id="themeToggle">
+            </label>
+            <label class="settings-row">
+              <span>
+                <strong>红绿反色</strong>
+                <em>仅影响收入和支出金额的颜色</em>
+              </span>
+              <input type="checkbox" id="colorInvert">
+            </label>
+          </div>
+        </div>
+        <div class="settings-block">
+          <div class="section-head">
+            <h3>分类规则</h3>
+          </div>
+          <div id="categoryRules" class="category-rule-list"></div>
+          <div class="category-rule-form">
+            <label>类型<select id="categoryRuleType"></select></label>
+            <label>新增分类<input id="newCategoryName" placeholder="支出用 一级/二级，收入可直接填名称"></label>
+            <button class="primary" id="addCategoryRule" type="button">新增分类</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/dashboard.js?v=20260525-account-debts"></script>
+</body>
+</html>
