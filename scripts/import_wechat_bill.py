@@ -52,10 +52,6 @@ def split_category(category):
     return parts[0], parts[1] if len(parts) > 1 else ""
 
 
-def contains_any(text, keywords):
-    return any(keyword in text for keyword in keywords)
-
-
 def normalize_payment_method(value, direction="", status=""):
     payment = clean_text(value)
     if payment:
@@ -70,7 +66,7 @@ def account_name(row, account_map):
     mapped = account_map.get(key)
     if mapped:
         return mapped
-    return re.sub(r"\s+", "", key).replace("(", " ").replace(")", "").strip()
+    return re.sub(r"\s+", "", key)
 
 
 def transaction_object(row):
@@ -103,10 +99,9 @@ def note_text(row):
 def builtin_classification(row):
     source = clean_text(row.get("交易类型"))
     direction = clean_text(row.get("收/支"))
-    object_name = transaction_object(row)
-    product = clean_text(row.get("商品"))
-    text = f"{source} {object_name} {product}"
 
+    # Keep classifications explicitly encoded by WeChat's structural fields.
+    # Merchant and product keyword classification belongs to the standard CSV flow.
     if "退款" in source:
         return "收入", "退款"
     if source == "二手交易款":
@@ -120,47 +115,6 @@ def builtin_classification(row):
         return "收入", ""
     if direction != "支出":
         return "", ""
-
-    if contains_any(text, ["中铁", "12306", "铁路", "列车补票", "高铁", "火车"]):
-        return "支出", "交通/火车高铁"
-    if contains_any(text, ["摩拜", "单车", "车费代扣", "公交", "地铁"]):
-        return "支出", "交通/公共交通"
-    if contains_any(text, ["手机充值", "话费", "中国移动", "中国联通", "中国电信"]):
-        return "支出", "居家/手机电话"
-    if contains_any(text, ["医院", "就诊", "挂号"]):
-        return "支出", "医疗/挂号门诊"
-    if contains_any(text, ["药房", "药店"]):
-        return "支出", "医疗/医疗药品"
-    if contains_any(text, ["丰巢", "服务费", "畅存费", "手续费"]):
-        return "支出", "其他/手续费"
-    if contains_any(text, ["DeepSeek", "火山引擎", "API服务"]):
-        return "支出", "教育/咨询"
-    if contains_any(
-        text,
-        [
-            "美团",
-            "大众点评",
-            "点餐",
-            "包子",
-            "饭",
-            "面",
-            "麦当劳",
-            "烧烤",
-            "居酒屋",
-            "小面",
-            "豆浆",
-            "餐",
-            "粥",
-            "馒头",
-            "驴肉火烧",
-            "把子肉",
-        ],
-    ):
-        return "支出", "餐饮/早午晚餐"
-    if contains_any(text, ["便利店", "超市", "水果", "小西瓜", "瓜"]):
-        return "支出", "购物/日用品"
-    if contains_any(text, ["京东", "淘宝", "电商", "达达平台", "先购后付"]):
-        return "支出", "购物/日用品"
 
     return "支出", ""
 
