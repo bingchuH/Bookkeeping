@@ -34,9 +34,6 @@ WECHAT_FIELD_MAP = {
     "金额(元)": "amount",
     "支付方式": "account",
     "当前状态": "status",
-    "交易单号": "note",
-    "商户单号": "note",
-    "备注": "note",
 }
 
 
@@ -77,22 +74,13 @@ def note_text(row):
     product = clean_text(row.get("商品"))
     tx_type = clean_text(row.get("交易类型"))
     status = clean_text(row.get("当前状态"))
-    transaction_id = clean_text(row.get("交易单号"))
-    merchant_id = clean_text(row.get("商户单号"))
-    remark = clean_text(row.get("备注"))
     parts = []
     if product:
         parts.append(product)
-    if remark and remark != product:
-        parts.append(f"备注:{remark}")
     if tx_type:
         parts.append(f"微信交易类型:{tx_type}")
     if status:
         parts.append(f"状态:{status}")
-    if transaction_id:
-        parts.append(f"微信交易单号:{transaction_id}")
-    if merchant_id:
-        parts.append(f"微信商户单号:{merchant_id}")
     return "；".join(parts)
 
 
