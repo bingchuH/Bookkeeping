@@ -32,26 +32,30 @@ AI 负责判断和协作：
 
 不要在对话中临时复刻代码已有的去重、余额、导入或待确认统计逻辑；清洗出标准 CSV 后，直接调用 CLI。
 
-## 数据位置
+## 初始化 SOP
 
-默认数据库不在 skill 目录内，而在：
+首次使用本 skill 时，不要直接初始化数据库。先运行：
 
 ```bash
 python3 scripts/bookkeeping.py db-path
 ```
 
-可用环境变量或参数指定数据库：
+告知用户当前数据库路径，并询问是否接受该路径或希望指定自定义路径。默认数据库不在 skill 目录内；未配置环境变量时通常位于：
 
-```bash
-BOOKKEEPING_DB_PATH=/path/to/bookkeeping.db python3 scripts/bookkeeping.py init-db
-python3 scripts/bookkeeping.py --db /path/to/bookkeeping.db init-db
-python3 scripts/bookkeeping.py init-db --db-path /path/to/bookkeeping.db
+```text
+~/.local/share/bookkeeping/bookkeeping.db
 ```
 
-首次使用或切换数据库后先运行：
+用户确认使用当前路径后，再运行：
 
 ```bash
 python3 scripts/bookkeeping.py init-db
+```
+
+如果用户希望使用自定义路径，指引用户设置数据库路径环境变量 `BOOKKEEPING_DB_PATH`，并初始化数据库：
+
+```bash
+BOOKKEEPING_DB_PATH=/path/to/bookkeeping.db python3 scripts/bookkeeping.py init-db
 ```
 
 ## config.yaml
@@ -80,7 +84,7 @@ categories:
 
 ```yaml
 accounts:
-  - 招行储蓄卡4985
+  - 招行储蓄卡
   - 支付宝
 ```
 
@@ -285,7 +289,7 @@ python3 scripts/bookkeeping.py rule-add 星巴克 --category "餐饮/饮料" --t
 python3 scripts/bookkeeping.py dashboard --host 127.0.0.1 --port 8765
 ```
 
-导入最后启动Dashboard，打开 `http://127.0.0.1:8765`。
+导入最后启动Dashboard，提醒用户打开 `http://127.0.0.1:8765`。
 
 ## 安全
 
