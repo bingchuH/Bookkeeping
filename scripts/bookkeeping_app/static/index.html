@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bookkeeping</title>
-  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20260602-pie-order">
 </head>
 <body>
   <div class="app">
@@ -107,23 +107,23 @@
           <div class="kpi"><div class="label">结余</div><div class="metric" id="mBalance">0.00</div></div>
           <div class="kpi"><div class="label">待确认</div><div class="metric" id="mPending">0</div></div>
         </div>
-        <div class="grid overview-charts">
+        <div class="grid overview-visuals">
           <div class="section trend-card"><h3>收支趋势</h3><div class="chart-wrap"><canvas id="cashflowTrend" width="900" height="220"></canvas><div class="chart-tip" id="cashflowTrendTip"></div></div></div>
-        </div>
-        <div class="grid pie-grid">
-          <div class="section pie-card">
-            <div class="section-head">
-              <h3>支出分类占比</h3>
-              <div class="level-switch" aria-label="支出分类层级">
-                <button class="active" data-expense-category-level="major">大类</button>
-                <button data-expense-category-level="minor">小类</button>
-              </div>
+          <div class="grid pie-grid">
+            <div class="section pie-card">
+              <h3>收入分类占比</h3>
+              <div class="chart-wrap"><canvas id="incomePie" width="500" height="500"></canvas><div class="chart-tip" id="incomePieTip"></div></div>
             </div>
-            <div class="chart-wrap"><canvas id="expensePie" width="860" height="420"></canvas><div class="chart-tip" id="expensePieTip"></div></div>
-          </div>
-          <div class="section pie-card">
-            <h3>收入分类占比</h3>
-            <div class="chart-wrap"><canvas id="incomePie" width="860" height="420"></canvas><div class="chart-tip" id="incomePieTip"></div></div>
+            <div class="section pie-card">
+              <div class="section-head">
+                <h3>支出分类占比</h3>
+                <div class="level-switch" aria-label="支出分类层级">
+                  <button class="active" data-expense-category-level="major">大类</button>
+                  <button data-expense-category-level="minor">小类</button>
+                </div>
+              </div>
+              <div class="chart-wrap"><canvas id="expensePie" width="500" height="500"></canvas><div class="chart-tip" id="expensePieTip"></div></div>
+            </div>
           </div>
         </div>
       </section>
@@ -177,6 +177,6 @@
     </main>
   </div>
 
-  <script src="/static/dashboard.js?v=20260525-account-debts"></script>
+  <script src="/static/dashboard.js?v=20260602-pie-order"></script>
 </body>
 </html>

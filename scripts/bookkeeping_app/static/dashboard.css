@@ -356,8 +356,19 @@
     .grid { display: grid; gap: 14px; }
     .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .columns { grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); align-items: start; }
-    .overview-charts { grid-template-columns: minmax(0, 1fr); }
-    .pie-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+    .overview-visuals {
+      height: calc(100dvh - 290px);
+      min-height: 0;
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      align-items: stretch;
+    }
+    .pie-grid { min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+    .overview-visuals .section { min-width: 0; padding: 12px; }
+    .overview-visuals h3 { margin-bottom: 8px; font-size: 18px; }
+    .overview-visuals .section-head { margin-bottom: 8px; }
+    .overview-visuals .trend-card,
+    .overview-visuals .pie-card { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+    .overview-visuals .chart-wrap { min-height: 0; display: grid; place-items: center; }
     .asset-grid { grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); align-items: start; }
     .account-table th:nth-child(1), .account-table td:nth-child(1) { width: auto; }
     .account-table th:nth-child(2), .account-table td:nth-child(2) { width: 150px; }
@@ -1402,6 +1413,11 @@
       resize: vertical;
       line-height: 1.45;
     }
+    @media (max-width: 1180px) {
+      .overview-visuals { height: auto; }
+      .trend-card .chart-wrap { height: min(34vw, 300px); }
+      .pie-card .chart-wrap { height: min(40vw, 340px); }
+    }
     @media (max-width: 940px) {
       .app { grid-template-columns: 1fr; }
       nav {
@@ -1415,6 +1431,8 @@
       main { padding: 18px 14px 36px; }
       header { flex-direction: column; }
       .kpis, .columns, .pie-grid, .asset-grid, .form, .quick-main-row, .quick-fields, .quick-actions, .quick-more-fields, .pending-layout, .pending-row { grid-template-columns: 1fr; }
+      .trend-card .chart-wrap { height: min(64vw, 300px); }
+      .pie-card .chart-wrap { height: min(82vw, 360px); }
       .toolbar, .toolbar input, .toolbar button, .toolbar a { width: 100%; }
       .toolbar { justify-content: stretch; }
       .title h2 { font-size: 30px; }

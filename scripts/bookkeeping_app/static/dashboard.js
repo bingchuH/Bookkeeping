@@ -769,6 +769,7 @@
     const trendHoverPoints = {};
     const pieHoverRegions = {};
     let chartAnimationToken = 0;
+    let chartResizeTimer = null;
 
     function cssVar(name) {
       return getComputedStyle(document.body).getPropertyValue(name).trim();
@@ -778,15 +779,24 @@
       return `${weight} ${size}px "Times New Roman", Times, FangSong, STFangsong, serif`;
     }
 
-    function prepareCanvas(canvas, cssWidth, cssHeight) {
+    function prepareCanvas(canvas, cssWidth, cssHeight, displayWidth = cssWidth, displayHeight = cssHeight) {
       const ratio = window.devicePixelRatio || 1;
-      canvas.style.width = '100%';
-      canvas.style.height = 'auto';
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
       canvas.width = Math.round(cssWidth * ratio);
       canvas.height = Math.round(cssHeight * ratio);
       const ctx = canvas.getContext('2d');
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       return {ctx, width: cssWidth, height: cssHeight};
+    }
+
+    function chartDisplaySize(canvas, square = false) {
+      const wrap = canvas.parentElement;
+      const width = Math.max(1, wrap.clientWidth);
+      const height = Math.max(1, wrap.clientHeight);
+      if (!square) return {width, height};
+      const size = Math.min(width, height);
+      return {width: size, height: size};
     }
 
     function textPill(ctx, text, x, y, align, color) {
@@ -830,7 +840,8 @@
 
     function drawTrend(canvasId, points, progress = 1) {
       const canvas = $(canvasId);
-      const {ctx, width, height} = prepareCanvas(canvas, 900, 220);
+      const display = chartDisplaySize(canvas);
+      const {ctx, width, height} = prepareCanvas(canvas, display.width, display.height);
       ctx.clearRect(0, 0, width, height);
       const pad = {left: 58, right: 26, top: 18, bottom: 34};
       const chartW = width - pad.left - pad.right;
@@ -921,7 +932,8 @@
 
     function drawPie(canvasId, rows, tone, progress = 1) {
       const canvas = $(canvasId);
-      const {ctx, width, height} = prepareCanvas(canvas, 860, 420);
+      const display = chartDisplaySize(canvas);
+      const {ctx, width, height} = prepareCanvas(canvas, display.width, display.height);
       ctx.clearRect(0, 0, width, height);
       pieHoverRegions[canvasId] = [];
       const total = rows.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0);
@@ -934,8 +946,8 @@
       }
       const cx = width / 2;
       const cy = height / 2;
-      const radius = 116;
-      const innerRadius = 70;
+      const radius = Math.max(44, Math.min(height * .31, width * .18));
+      const innerRadius = radius * .6;
       let start = -Math.PI / 2;
       const labels = [];
       rows.forEach((row, index) => {
@@ -976,9 +988,9 @@
 
     function distributeLabels(labels, canvasHeight) {
       const sorted = labels.slice().sort((a, b) => a.labelY - b.labelY);
-      const gap = 22;
-      const minY = 22;
-      const maxY = canvasHeight - 22;
+      const gap = 26;
+      const minY = 26;
+      const maxY = canvasHeight - 26;
       sorted.forEach(label => {
         label.labelY = Math.max(minY, Math.min(maxY, label.labelY));
       });
@@ -1009,10 +1021,11 @@
         left: distributeLabels(labels.filter(label => label.side === 'left'), canvas.height),
         right: distributeLabels(labels.filter(label => label.side === 'right'), canvas.height),
       };
-      ctx.font = chartFont(12);
+      ctx.font = chartFont(12, 650);
       Object.entries(sides).forEach(([side, sideLabels]) => {
         const right = side === 'right';
-        const lineX = right ? canvas.width - 250 : 250;
+        const labelInset = Math.min(190, Math.max(110, canvas.width * .28));
+        const lineX = right ? canvas.width - labelInset : labelInset;
         const textX = right ? lineX + 8 : lineX - 8;
         sideLabels.forEach(label => {
           const name = categoryLabel(label.row.category || '未分类');
@@ -1051,7 +1064,7 @@
       const canvas = $(canvasId);
       canvas.addEventListener('mousemove', (event) => {
         const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
+        const x = (event.clientX - rect.left) * (canvas.width / (window.devicePixelRatio || 1)) / rect.width;
         const nearest = (trendHoverPoints[canvasId] || [])
           .map(point => ({point, distance: Math.abs(point.x - x)}))
           .sort((a, b) => a.distance - b.distance)[0];
@@ -1079,8 +1092,8 @@
       const canvas = $(canvasId);
       canvas.addEventListener('mousemove', (event) => {
         const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
+        const x = (event.clientX - rect.left) * (canvas.width / (window.devicePixelRatio || 1)) / rect.width;
+        const y = (event.clientY - rect.top) * (canvas.height / (window.devicePixelRatio || 1)) / rect.height;
         const regions = pieHoverRegions[canvasId] || [];
         const hit = regions.find(region => {
           const dx = x - region.cx;
@@ -1110,6 +1123,12 @@
 
     bindPieHover('expensePie', 'expensePieTip');
     bindPieHover('incomePie', 'incomePieTip');
+    window.addEventListener('resize', () => {
+      clearTimeout(chartResizeTimer);
+      chartResizeTimer = setTimeout(() => {
+        if (summaryData) updateOverview();
+      }, 120);
+    });
 
     function initPeriodDefaults() {
       if (periodInitialized) {
