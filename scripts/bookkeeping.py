@@ -5,6 +5,7 @@ import csv
 import datetime as dt
 import io
 import json
+import math
 import mimetypes
 import os
 import re
@@ -749,6 +750,8 @@ def standardize_category(category, tx_type=None):
 
 
 def apply_learned_rule(conn, record):
+    if record.get("category"):
+        return record
     candidates = conn.execute(
         "select merchant, category, type from merchant_category_rules order by length(merchant) desc"
     ).fetchall()
@@ -1821,9 +1824,10 @@ def standard_row_raw_category(record):
     ) or str(record.get("category") or "").strip()
 
 
-def keyword_candidate_analysis(path, default_account=None, min_count=3, limit=30):
+def keyword_candidate_analysis(path, default_account=None):
     rows = read_standard_csv(path)
     normalized_rows = [normalize_import_record(record, index) for index, record in enumerate(rows, start=2)]
+    min_count = max(3, math.ceil(len(normalized_rows) * 0.02))
     init_db()
     conn = connect()
     try:
@@ -1865,7 +1869,7 @@ def keyword_candidate_analysis(path, default_account=None, min_count=3, limit=30
         def top(counter, key):
             return [
                 {"value": value, "count": count, "example": examples.get(key, {}).get(value)}
-                for value, count in counter.most_common(limit)
+                for value, count in counter.most_common()
                 if count >= min_count
             ]
 
@@ -1875,6 +1879,7 @@ def keyword_candidate_analysis(path, default_account=None, min_count=3, limit=30
             "db_rule_applied": db_rule_applied,
             "unmatched_count": unmatched_count,
             "min_count": min_count,
+            "min_count_formula": "max(3, ceil(total_rows * 0.02))",
             "candidates": {
                 "transaction_object": top(object_counter, "transaction_object"),
                 "note": top(note_counter, "note"),
@@ -2717,8 +2722,6 @@ def build_parser():
     p = sub.add_parser("keyword-candidates")
     p.add_argument("path")
     p.add_argument("--account")
-    p.add_argument("--min-count", type=int, default=3)
-    p.add_argument("--limit", type=int, default=30)
     p.add_argument("--output", help="Write keyword candidate analysis JSON")
 
     p = sub.add_parser("apply-keyword-rules")
@@ -2806,7 +2809,7 @@ def main(argv=None):
             print(f"标准 CSV 检查: {output}")
         print(json.dumps(result, ensure_ascii=False, indent=2))
     elif args.cmd == "keyword-candidates":
-        result = keyword_candidate_analysis(args.path, args.account, args.min_count, args.limit)
+        result = keyword_candidate_analysis(args.path, args.account)
         if args.output:
             output = Path(args.output)
             output.parent.mkdir(parents=True, exist_ok=True)
