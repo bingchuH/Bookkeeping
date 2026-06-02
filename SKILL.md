@@ -5,18 +5,30 @@ description: "本 skill 管理一个本地 SQLite 个人记账数据库。用户
 
 # Bookkeeping
 
-## 边界
+## 使用目标
+
+Agent 的职责不是把账单原样交给脚本，而是把人工判断融入导入流程：
+
+1. 把原始账单整理成标准 CSV。
+2. 主动分析未分类账目，提炼稳定、可复用的关键词规则。
+3. 将可靠的关键词规则写入数据库，再用于本次账单和以后的账单。
+4. 判断账户别名和跨来源重复候选。
+5. 导入账目，把无法可靠判断的部分留给人工确认。
+
+## 分工边界
 
 AI 负责判断和协作：
 
 - 从自然语言中提取金额、账户、时间、对象、类型、分类意图。
 - 对未知来源原始账单做只读检查，并临场编写一次性清洗脚本，把原始账单转换为标准 CSV。
+- 主动梳理未分类账目的高频线索，判断哪些关键词规则可以长期复用。
+- 把高置信、可复用的关键词规则写入数据库；不能只写入临时 JSON。
 - 判断低置信账户别名、分类规则和待确认事项是否需要用户参与。
 
 代码负责确定性工作：
 
 - 数据库初始化、写入、余额计算、导入、去重、待确认统计、导出和 Dashboard。
-- 标准 CSV 的检查、导入前重复候选分析、正式导入后的去重与待确认生成。
+- 标准 CSV 检查、读取已有关键词规则、生成关键词候选、导入前重复候选分析、正式导入后的去重与待确认生成。
 
 不要在对话中临时复刻代码已有的去重、余额、导入或待确认统计逻辑；清洗出标准 CSV 后，直接调用 CLI。
 
@@ -41,6 +53,38 @@ python3 scripts/bookkeeping.py init-db --db-path /path/to/bookkeeping.db
 ```bash
 python3 scripts/bookkeeping.py init-db
 ```
+
+## config.yaml
+
+项目配置文件位于：
+
+```text
+scripts/config.yaml
+```
+
+它用于维护用户的长期记账口径，不用于保存账目数据。Agent 首次使用本 skill、清洗新来源账单或判断账户关系前，应先读取该文件。
+
+`categories` 定义可用分类树。例如：
+
+```yaml
+categories:
+  支出:
+    餐饮:
+      - 早午晚餐
+      - 饮料
+```
+
+对应合法分类为 `餐饮/早午晚餐` 和 `餐饮/饮料`。Agent 只能将账目和关键词规则映射到当前已有的合法分类；不要临场编造分类。
+
+`accounts` 维护用户明确配置的长期自有账户清单。例如：
+
+```yaml
+accounts:
+  - 招行储蓄卡4985
+  - 支付宝
+```
+
+Agent 用它理解用户已经维护的账户，并辅助判断两个账户是否属于用户本人。只有确认转出和转入账户都是用户自有账户时，才能归类为内部转账。账户的新增、重命名和删除优先由用户通过 Dashboard 管理。
 
 ## 常用命令
 
@@ -86,7 +130,13 @@ python3 scripts/import_wechat_bill.py "/path/to/wechat.xlsx" \
   --output /tmp/wechat_standard.csv
 ```
 
-支付宝/微信适配脚本不负责正式导入、跨来源去重或通用关键词闭环；它们只输出标准 CSV。输出后和未知账单一样进入“标准 CSV 流程”。
+账户映射遵循以下规则：
+
+- 能高置信确认是同一账户时，AI 直接映射，不需要询问用户。例如：账单中的 `招商银行储蓄卡(4985)` 可以直接映射为本地已有账户 `招行储蓄卡4985`。
+- 存在歧义时，必须询问用户确认。例如：账单中的 `中国银行` 是否应映射为本地已有账户 `中行工资卡`，不能自行判断。
+- 无法确认且不影响导入时，保留账单中的支付方式名称，不要为了减少账户数量强行合并。
+
+支付宝/微信适配脚本不负责正式导入，只输出标准 CSV。输出后和未知账单一样进入“标准 CSV 流程”。
 
 未知来源账单必须先只读检查文件结构、sheet、表头、样本行、类型/账户/分类/金额方向分布。然后允许在 `/tmp` 临场编写一次性清洗脚本，输出标准 CSV。不要把未知来源的一次性清洗逻辑写入主 CLI 或 Dashboard。
 
@@ -106,7 +156,9 @@ transaction_time,type,category_level1,category_level2,category,amount,currency,t
 
 清洗完成后必须进入标准 CSV 流程，不要继续手写导入、去重或统计逻辑。
 
-## 标准 CSV 流程
+## 标准 CSV 导入 SOP
+
+支付宝、微信和未知来源账单完成清洗后，都必须走同一套流程。Agent 应主动完成能可靠完成的判断，仅在语义或账户关系存在歧义时询问用户。
 
 1. 检查标准 CSV：
 
@@ -114,20 +166,40 @@ transaction_time,type,category_level1,category_level2,category,amount,currency,t
 python3 scripts/bookkeeping.py import-check /tmp/cleaned_bill.csv --output /tmp/bookkeeping_import_check.json
 ```
 
-2. 做通用关键词候选分析。这个命令会先应用数据库已有关键词规则，再输出仍未分类的高频候选：
+重点查看：金额是否有效，时间、类型和账户是否完整，内部转账是否缺目标账户，以及仍有多少账目缺少分类。
+
+2. 做一次关键词候选分析。命令会先读取数据库已有规则，再一次性输出仍未分类的高频线索：
 
 ```bash
 python3 scripts/bookkeeping.py keyword-candidates /tmp/cleaned_bill.csv \
   --output /tmp/bookkeeping_keyword_candidates.json
 ```
 
-AI 读取输出后，只判断：
+Agent 读取输出后，主动梳理 `transaction_object`、`note` 和 `raw_category` 中的候选，只保留：
 
-- 高频值是否语义稳定、以后也可复用。
-- 是否能映射到当前合法分类。
-- 是否能确认交易类型。
+- 含义明确，能够映射到当前合法分类的关键词。
+- 以后遇到同类账目仍然成立的关键词。
+- 能可靠确认交易类型的关键词。
 
-AI 写入本次规则文件。没有高置信规则就写空数组：
+涉及到对个人的交易，不要提取关键词，但要在回复中提醒用户，与此人有多次交易，可移步Dashboard按照人名创建规则。不要把个人昵称、订单号、流水号、一次性商品标题、完整备注或含义过宽的词写成长期规则。不确定时留给人工确认，不要猜。
+
+候选按完整字段值统计，不限制返回数量。高频门槛由脚本根据本次账单总行数自动计算：`max(3, 向上取整(总行数 * 2%))`。
+
+3. 把本次分析得到的每条高置信、可复用规则写入数据库：
+
+```bash
+python3 scripts/bookkeeping.py rule-add 地铁 --category "交通/公共交通" --type 支出
+```
+
+这一步是 Agent 必须完成的长期知识沉淀。不能只在当前 CSV 中补分类，也不能只生成临时规则文件。数据库中的规则会用于后续导入，并会自动尝试处理历史待确认账目。
+
+规则入库后用以下命令检查本轮规则是否已保存（可选）：
+
+```bash
+python3 scripts/bookkeeping.py rule-list
+```
+
+4. 同时把本轮规则整理到临时 JSON，用于补全当前标准 CSV。没有新规则时写空数组：
 
 ```json
 []
@@ -141,31 +213,30 @@ AI 写入本次规则文件。没有高置信规则就写空数组：
 ]
 ```
 
-不要把个人昵称、订单号、流水号、一次性商品标题、含义过宽的词写成规则。
-
-3. 如果有本次规则，把它应用到标准 CSV，再重新执行 `import-check` 和 `keyword-candidates`；直到没有新的高置信规则：
+应用本轮规则：
 
 ```bash
 python3 scripts/bookkeeping.py apply-keyword-rules /tmp/cleaned_bill.csv \
   --keyword-rules /tmp/bookkeeping_keyword_rules.json \
   --output /tmp/cleaned_bill_with_rules.csv
-
-python3 scripts/bookkeeping.py import-check /tmp/cleaned_bill_with_rules.csv \
-  --output /tmp/bookkeeping_import_check.json
-
-python3 scripts/bookkeeping.py keyword-candidates /tmp/cleaned_bill_with_rules.csv \
-  --output /tmp/bookkeeping_keyword_candidates.json
 ```
 
-后续步骤使用最后一版标准 CSV。
+5. 对补全后的 CSV 重新执行检查：
 
-4. 生成重复候选：
+```bash
+python3 scripts/bookkeeping.py import-check /tmp/cleaned_bill_with_rules.csv \
+  --output /tmp/bookkeeping_import_check.json
+```
+
+关键词候选只分析一次。剩余空分类允许进入待确认，不要为了减少待确认数量而过度归类。
+
+6. 生成重复候选：
 
 ```bash
 python3 scripts/bookkeeping.py import-duplicates /tmp/cleaned_bill_with_rules.csv --output /tmp/bookkeeping_duplicate_candidates.json
 ```
 
-5. 由 AI 只判断高置信账户别名，写入映射文件。没有高置信映射也写空对象：
+7. Agent 只判断高置信账户别名，写入映射文件。没有高置信映射也写空对象：
 
 ```json
 {}
@@ -173,17 +244,19 @@ python3 scripts/bookkeeping.py import-duplicates /tmp/cleaned_bill_with_rules.cs
 
 映射方向是“新导入账户名 -> 数据库已有账户名”。
 
-6. 正式导入：
+8. 正式导入：
 
 ```bash
 python3 scripts/bookkeeping.py import /tmp/cleaned_bill_with_rules.csv --duplicate-account-map /tmp/bookkeeping_duplicate_account_map.json
 ```
 
-7. 导入后查看待确认摘要：
+9. 导入后查看待确认摘要：
 
 ```bash
 python3 scripts/bookkeeping.py unconfirmed-summary
 ```
+
+10. 导入完成后启动 Dashboard，把剩余事项交给人工确认。
 
 ## 待确认事项 SOP
 
@@ -202,7 +275,7 @@ python3 scripts/bookkeeping.py confirm 3 --category "餐饮/饮料" --learn
 python3 scripts/bookkeeping.py rule-add 星巴克 --category "餐饮/饮料" --type 支出
 ```
 
-只有规则稳定、可泛化时才 `--learn` 或 `rule-add`。不要把个人昵称、一次性商品标题、订单号、完整流水号作为长期规则。
+只有规则稳定、可泛化时才 `--learn` 或 `rule-add`。Agent 在批量导入阶段发现可靠关键词时应主动使用 `rule-add`；人工处理单条待确认记录时，只有确认该交易对象可以代表同类账目，才使用 `--learn`。
 
 如果用户明确需要新分类，先用 Dashboard 或分类管理命令新增分类，再确认记录。
 
