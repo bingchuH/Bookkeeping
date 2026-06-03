@@ -40,7 +40,7 @@
 复制这句话发给 Agent
 
 ```shell
-帮我安装这个 skill：https://github.com/bingchuH/Bookkeeping.git
+帮我安装这个 skill：https://github.com/bingchuH/Bookkeeping.git，仅保留SKILL.md和scripts/
 ```
 
 ### 2. 首次导入历史账单
