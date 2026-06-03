@@ -1888,7 +1888,13 @@ def keyword_candidate_analysis(path, default_account=None):
             "rule_format": [
                 {"keyword": "地铁", "category": "交通/公共交通", "type": "支出"}
             ],
-            "guidance": "Only return high-confidence, reusable keyword rules. Prefer stable service/product/scene words. Do not use personal names, order ids, one-off full titles, or ambiguous words.",
+            "guidance": (
+                "Group candidates by type first. Only return high-confidence, reusable keyword rules. "
+                "Use transaction_object directly only when it clearly represents a stable single category. "
+                "Do not create unconditional rules for broad platform names such as 美团, 京东 or 淘宝; "
+                "inspect note details for concrete brands or merchants instead. Prefer specific stable brand keywords, "
+                "and do not use personal names, platform names, order ids, one-off full titles, or ambiguous words."
+            ),
         }
     finally:
         conn.close()
