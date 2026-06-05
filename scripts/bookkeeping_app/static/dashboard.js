@@ -11,6 +11,7 @@
     let categoryOptions = [];
     let categoryTree = {};
     let accountOptions = [];
+    let accountFilterOptions = [];
     let keywordRules = [];
     let summaryData = null;
     let periodMode = 'month';
@@ -1335,8 +1336,8 @@
     }
 
     async function refresh() {
-      const [summary, entryData, pending, cats, tree, accounts, debts, rules] = await Promise.all([
-        api('/api/summary'), api('/api/entries-all'), api('/api/unconfirmed'), api('/api/categories'), api('/api/category-tree'), api('/api/account-names'), api('/api/account-debts'), api('/api/keyword-rules')
+      const [summary, entryData, pending, cats, tree, accounts, accountFilters, debts, rules] = await Promise.all([
+        api('/api/summary'), api('/api/entries-all'), api('/api/unconfirmed'), api('/api/categories'), api('/api/category-tree'), api('/api/account-names'), api('/api/account-filter-names'), api('/api/account-debts'), api('/api/keyword-rules')
       ]);
       entries = pendingDelete ? entryData.filter(entry => Number(entry.id) !== Number(pendingDelete.row.id)) : entryData;
       const summaryAccounts = summary.account_balances || summary.accounts || [];
@@ -1356,6 +1357,7 @@
       if (entryFilters.category && !categoryOptions.includes(entryFilters.category)) entryFilters.category = '';
       if (entryFilters.type && entryFilters.category && !categoriesForType(entryFilters.type).includes(entryFilters.category)) entryFilters.category = '';
       accountOptions = accounts;
+      accountFilterOptions = accountFilters;
       keywordRules = rules;
       summaryData = summary;
       initPeriodDefaults();
@@ -1406,7 +1408,7 @@
         headerFilterCell('category', '分类', entryFilterCategoryOptions()),
         '<th><div class="entry-head-filter static"><span class="entry-head-label">状态</span></div></th>',
         '<th><div class="entry-head-filter static"><span class="entry-head-label">金额</span></div></th>',
-        headerFilterCell('account', '账户', accountOptions),
+        headerFilterCell('account', '账户', accountFilterOptions),
         '<th><div class="entry-head-filter static"><span class="entry-head-label">交易对象</span></div></th>',
         '<th><div class="entry-head-filter static"><span class="entry-head-label">备注</span></div></th>',
         '<th class="entry-actions-head"></th>',

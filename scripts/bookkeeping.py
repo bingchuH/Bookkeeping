@@ -468,9 +468,16 @@ def config_account_names():
 def account_names():
     init_db()
     conn = connect()
-    names = set(config_account_names())
+    names = {row["name"] for row in conn.execute("select name from accounts").fetchall()}
+    conn.close()
+    return sorted(names)
+
+
+def historical_account_names():
+    init_db()
+    conn = connect()
+    names = set(account_names())
     for sql in [
-        "select name from accounts",
         "select distinct account name from entries where account != ''",
         "select distinct target_account name from entries where target_account is not null and target_account != ''",
         "select distinct account name from unconfirmed_entries where account != ''",
@@ -560,22 +567,10 @@ def delete_account_name(name):
     init_db()
     conn = connect()
     try:
-        usage = conn.execute(
-            """
-            select
-                (select count(*) from entries where account = ? or target_account = ?) +
-                (select count(*) from unconfirmed_entries where account = ? or target_account = ?) as c
-            """,
-            (name, name, name, name),
-        ).fetchone()["c"]
-        if usage:
-            raise ValueError("cannot delete account with existing entries")
         conn.execute("delete from accounts where name = ?", (name,))
         conn.commit()
     finally:
         conn.close()
-
-    write_config_accounts([account for account in config_account_names() if account != name])
     return {"ok": True}
 
 
@@ -2465,6 +2460,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(list_account_debts(conn))
             elif parsed.path == "/api/account-names":
                 self.send_json(account_names())
+            elif parsed.path == "/api/account-filter-names":
+                self.send_json(historical_account_names())
             elif parsed.path == "/api/unconfirmed":
                 apply_all_keyword_rules_to_unconfirmed()
                 self.send_json(rows_to_dicts(conn.execute(
